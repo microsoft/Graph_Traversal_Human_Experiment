@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Human Planning - Graph Traversal</title>
+
+  <!-- Load the forward and reverse states (kept for structure; not shown in trials) -->
+
+  <script src="GT_stimuli_b1_full_LD_control.js"></script>
+  <script src="GT_stimuli_b2_full_LD_control.js"></script>
+
+  <!-- FileSaver for saving files -->
+  <script src="https://cdn.jsdelivr.net/npm/file-saver"></script>
+
+  <!-- JSZip for bundling puzzle logs + audio into one download -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .site-footer {
+      background-color: #f1f1f1;
+      border-top: 1px solid #ccc;
+      padding: 6px 20px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #555;
+      margin-top: auto; /* pushes footer to bottom */
+      width: 100%;
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .left-column {
+      max-width: 420px;
+      flex-shrink: 1;
+      background-color: #ffffff;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      /* Remove min-height - let content determine height */
+    }
+
+    .stim-prompt{
+      margin-top:12px;
+      padding:10px 12px;
+      border:1px solid #cfd8dc;
+      border-radius:6px;
+      background:#fafafa;
+    }
+
+    /* Style both practice and trial textareas the same */
+    .notes-textarea, .practice-textarea{
+      width:100%;
+      min-height:260px;
+      resize:vertical;
+      padding:12px;
+      font-size:16px;
+      line-height:1.4;
+      border:1px solid #cfd8dc;
+      border-radius:6px;
+      box-sizing:border-box;
+    }
+    .notes-textarea:focus, .practice-textarea:focus{
+      outline:none;
+      border-color:#42a5f5;
+      box-shadow:0 0 0 3px rgba(66,165,245,.25);
+    }
+
+    .right-column {
+      max-width: 700px;
+      flex-shrink: 1;
+      flex: 2;
+      background-color: #ffffff;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      /* Remove min-height - let content determine height */
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* center the Continue button in the white space */
+      align-items: center;
+      min-height: 280px; /* keep a pleasant white space area */
+    }
+
+    /* Countdown badge shown during trials (kept for structure; hidden in UI) */
+    .trial-timer {
+      align-self: flex-end;
+      margin-bottom: 8px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      border: 1px solid #a5d6a7;
+      background: #e8f5e9;
+      color: #1b5e20;
+      font-weight: 600;
+      font-size: 20px;
+      letter-spacing: .5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .trial-timer.warning {
+      border: 1px solid #ffe082;
+      background: #fff8e1;
+      color: #8d6e63;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .trial-timer.urgent {
+      background: #ffebee;
+      border-color: #ef9a9a;
+      color: #b71c1c;
+    }
+
+    .rules-text {
+      border-left: 6px solid #42a5f5;
+      font-size: 0.95rem;
+      padding-left: 12px;
+      margin-bottom: 20px;
+    }
+
+    .state-display {
+      font-size: 16px;
+      margin: 12px 0;
+      background-color: #f4faff;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border-left: 4px solid #42a5f5;
+    }
+
+    .done-button {
+      font-size: 14px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      background-color: #42a5f5;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .done-button:hover { background-color: #1e88e5; }
+
+    .center { text-align: center; }
+
+    /* Intro, instructions, error, end screens */
+    #intro-screen, #instructions-screen, #end-screen {
+      max-width: 600px;
+      background-color: #ffffff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      display: none;
+    }
+
+    #end-screen { text-align: center; }
+
+    #error-message {
+      display: none;
+      max-width: 600px;
+      color: #B00020;
+      background-color: #ffe6e6;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid #F44336;
+    }
+
+
+
+  </style>
+</head>
+<body>
+
+  <!-- Inline error message (replaces native alerts) -->
+  <div id="error-message"></div>
+
+  <!-- Container for transient voice prompt banner (inserted dynamically) -->
+  <!-- <div id="prompt-message"></div> created by ensurePromptBanner() -->
+
+  <!-- Container for the multi-step intro screens -->
+  <div id="intro-screen"></div>
+
+  <!-- Container for per-block instructions -->
+  <div id="instructions-screen"></div>
+
+  <!-- The main task UI (blank left/right columns during trials) -->
+  <div id="task-ui" class="container" style="display: none;"></div>
+
+  <!-- The final end screen -->
+  <div id="end-screen">
+    <p style="margin-bottom: 24px; font-size: 18px;">
+      The study is now complete.<br>
+      Press any key to receive payment.
+    </p>
+  </div>
+
+  <script type="module">
+    // --------------------------------------
+    // GLOBAL CONFIG
+    // --------------------------------------
+    const N = 9; // N problems per block
+    const REST_AFTER = Number(new URLSearchParams(location.search).get('restAfter')) || 5;
+
+    const forwardBlock = Array.from({ length: N }, () => ({}));
+    const reverseBlock = Array.from({ length: N }, () => ({}));
+
+    // Decide order of blocks randomly
+    const blocks = Math.random() < 0.5 ? ['forward','reverse'] : ['reverse','forward'];
+    const blockData = { forward: forwardBlock, reverse: reverseBlock };
+
+    let blockIndex = 0; // which block (0 or 1)
+    let trialIndex = 0; // which trial (0..N-1)
+
+    // Build per-block random prompts (N per block) from the correct stimulus set
+    const forwardPrompts   = buildPromptsWithConstraints(GT_STIMULI_B1, N);
+    const reversePrompts = buildPromptsWithConstraints(GT_STIMULI_B2, N);
+    let currentPrompt = null;
+    const promptData = { forward: forwardPrompts, reverse: reversePrompts };
+
+    // puzzle state and logs
+    let currentState = {};
+    let allProblemLogs = [];
+
+    function showInBlockRest() {
+      clearTrialTimer(); // safety: ensure any timers are off
+
+      const inst = document.getElementById('instructions-screen');
+      inst.style.display = 'block';
+      inst.innerHTML = `
+        <h2>Short Break</h2>
+        <p>Please take a short break and press the 'Continue' button below when you are ready.</p>
+        <div style="text-align:center; margin-top:24px;">
+          <button id="rest-continue-btn" style="padding:10px 20px;">Continue</button>
+        </div>
+      `;
+
+      // Hide the task UI during the break; **no audio recording** happens here
+      document.getElementById('task-ui').style.display = 'none';
+
+      document.getElementById('rest-continue-btn').addEventListener('click', () => {
+        // Recording resumes automatically when the next trial loads (via loadTrial -> startRecording)
+        inst.style.display = 'none';
+        document.getElementById('task-ui').style.display = 'flex';
+        loadTrial();
+      });
+    }
+
+    // participant info
+    let participantData = { agreement:'', gender:'', age:'', languages:'', languageDetails:'' };
+
+    // problem start timestamp
+    let problemStartTime = null;
+
+
+    // --------------------------------------
+    // FIREBASE CONFIGURATION
+    // --------------------------------------
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getStorage, ref, uploadBytes } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCUc55f4nUPyN6MoZX8Qydia3Ouibj8BD0",
+      authDomain: "graph-traversal-human-data.firebaseapp.com",
+      projectId: "graph-traversal-human-data",
+      storageBucket: "graph-traversal-human-data.firebasestorage.app",
+      messagingSenderId: "768052117663",
+      appId: "1:768052117663:web:fdbd4874cd9fe10cb8e2aa",
+      measurementId: "G-ZR2Y25S648"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+  
+    // --------------------------------------
+    // HELPERS
+    // --------------------------------------
+
+    function showError(msg) {
+      const err = document.getElementById('error-message');
+      err.textContent = msg;
+      err.style.display = 'block';
+      setTimeout(() => err.style.display = 'none', 3000);
+    }
+
+    // Build a prompt list with constraints… 
+    function buildPromptsWithConstraints(stimuli, N) {
+      // Shuffle a working copy
+      const pool = stimuli.slice();
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+
+      // Bucket by path_nodes length
+      const bySize = { 3: [], 4: [], 5: [] };
+      pool.forEach(s => {
+        const n = s?.path_nodes?.length;
+        if (bySize[n]) bySize[n].push(s);
+      });
+
+      const out = [];
+
+      const removeFrom = (size, stim) => {
+        const arr = bySize[size];
+        if (!arr) return;
+        const idx = arr.indexOf(stim);
+        if (idx > -1) arr.splice(idx, 1);
+      };
+
+      const takeOneFromSizes = (sizes) => {
+        const bag = [];
+        sizes.forEach(sz => { if (bySize[sz]?.length) bag.push(...bySize[sz]); });
+        if (!bag.length) return null;
+        const chosen = bag[Math.floor(Math.random() * bag.length)];
+        removeFrom(chosen.path_nodes.length, chosen);
+        return chosen;
+      };
+
+      // 1) First trial must have 3 path_nodes
+      let pick = takeOneFromSizes([3]);
+      if (!pick) { console.warn("No 3-node for first trial; relaxing."); pick = takeOneFromSizes([4, 5]); }
+      if (pick) out.push(pick);
+
+      // 2) Second trial must have 3 or 4 path_nodes
+      pick = takeOneFromSizes([3, 4]);
+      if (!pick) { console.warn("No 3/4-node for second trial; relaxing."); pick = takeOneFromSizes([5]); }
+      if (pick) out.push(pick);
+
+      // 3) While filling the rest, enforce:
+      //    - No two consecutive 5sflan
+      //    - If sequence is 4-5 or 5-4, next must be 3
+      while (out.length < Math.min(N, stimuli.length)) {
+        const prev = out[out.length - 2]?.path_nodes?.length ?? null;
+        const last = out[out.length - 1]?.path_nodes?.length ?? null;
+
+        // Rule: if we have 4-5 or 5-4, next must be 3 (hard try)
+        const forceNextIs3 = (prev === 4 && last === 5) || (prev === 5 && last === 4);
+
+        pick = null;
+
+        if (forceNextIs3) {
+          pick = takeOneFromSizes([3]);
+          if (!pick) {
+            console.warn("No 3-node available after a 4-5/5-4 sequence; relaxing to other allowed sizes.");
+          }
+        }
+
+        if (!pick) {
+          // Start with all sizes
+          let allowed = [3, 4, 5];
+
+          // 3) No two consecutive 5s
+          if (last === 5) allowed = allowed.filter(s => s !== 5);
+
+          // Try to pick from allowed
+          pick = takeOneFromSizes(allowed);
+
+          // Final relax if pool is tight
+          if (!pick) pick = takeOneFromSizes([3, 4, 5]);
+          if (!pick) break;
+        }
+
+        out.push(pick);
+      }
+
+      return out.slice(0, N);
+    }
+
+
+
+    // ---- Trial timer (limit based on cities) ----
+    let countdownInterval = null;
+    let countdownDeadline = 0;
+    let trialActive = false; // guards against double-ending
+
+    function formatClock(ms) {
+      const total = Math.ceil(ms / 1000);
+      const m = Math.max(0, Math.floor(total / 60));
+      const s = Math.max(0, total % 60);
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function updateTimerDisplay() {
+      const remaining = Math.max(0, countdownDeadline - Date.now());
+      const secs = Math.ceil(remaining / 1000);
+
+      // Shared logic
+      const updateEl = (el) => {
+        if (!el) return;
+        el.textContent = formatClock(remaining);
+        el.classList.toggle('urgent',  secs <= URGENT_THRESHOLD_S);
+        el.classList.toggle('warning', secs > URGENT_THRESHOLD_S && secs <= WARNING_THRESHOLD_S);
+      };
+
+      updateEl(document.getElementById('trial-timer'));
+      updateEl(document.getElementById('pre-final-timer'));
+      updateEl(document.getElementById('internal-imagery-timer')); // NEW
+
+      if (remaining <= 0) {
+        clearTrialTimer();
+
+        // If an internal imagery survey is up, auto-advance to the pre-final survey
+        if (document.getElementById('internal-imagery-survey')) {
+          window.internalImagerySurvey = {
+            responses: collectSurveyResponses('#internal-imagery-survey'),
+            completedAt: Date.now(),
+            timedOut: true
+          };
+          showPreFinalSurvey();
+          return;
+        }
+
+        // If the pre-final survey is up, auto-advance to the final survey
+        if (document.getElementById('pre-final-survey')) {
+          window.preFinalSurvey = {
+            responses: collectSurveyResponses('#pre-final-survey'),
+            completedAt: Date.now(),
+            timedOut: true
+          };
+          showFinalSurvey();
+          return;
+        }
+
+        // Otherwise, we're in a trial → end the trial on timeout
+        endTrial('timeout');
+      }
+    }
+
+    function getTrialLimitMsFromCities(count) {
+      const secsByCities = { 3: 90, 4: 150, 5: 210 }; // seconds
+      const seconds = secsByCities[count] ?? 15;
+      return seconds * 1000;
+    }
+
+    function startTrialTimer(limitMs) {
+      if (typeof limitMs !== 'number') throw new Error('startTrialTimer requires limitMs');
+      clearTrialTimer();
+      countdownDeadline = Date.now() + limitMs;
+
+      const el = document.getElementById('trial-timer');
+      if (el) el.classList.remove('urgent', 'warning');
+
+      updateTimerDisplay();
+      countdownInterval = setInterval(updateTimerDisplay, 250);
+    }
+
+    const WARNING_THRESHOLD_S = 20;
+    const URGENT_THRESHOLD_S  = 10;
+
+
+    function clearTrialTimer() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+    }
+
+    function collectSurveyResponses(containerSelector) {
+      const el = document.querySelector(containerSelector);
+      const responses = {};
+      if (!el) return responses;
+      el.querySelectorAll('.q-row').forEach(row => {
+        const qid = row.dataset.qid;
+        const sel = row.querySelector('.likert-btn.selected, .likert-btn[aria-pressed="true"]');
+        if (qid && sel) responses[qid] = Number(sel.dataset.val);
+      });
+      return responses;
+    }
+
+    function addInternalImagerySurveyStyles() {
+      addBaseSurveyStyles();
+      ensureStyle('internal-imagery-survey-css', `
+        #internal-imagery-survey.survey-container { max-width: 1100px; width: 100%; margin: 0 auto; }
+        #internal-imagery-survey .survey-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+        #internal-imagery-survey .survey-col,
+        #internal-imagery-survey .q-row,
+        #internal-imagery-survey .q-row > * { min-width: 0; }
+
+        #internal-imagery-survey .likert { width: max-content; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; }
+        #internal-imagery-survey .likert-btn {
+          flex: 0 0 auto; min-width: 26px; height: 26px; padding: 0 6px;
+          font-size: 12px; line-height: 26px; border-radius: 4px; margin: 0;
+        }
+
+        #internal-imagery-survey .q-row { grid-template-columns: 1fr auto; gap: 8px; }
+        #internal-imagery-survey .q-row:has(textarea.survey-text) { grid-template-columns: 1.2fr auto; }
+      `);
+    }
+
+    function showInternalImagerySurvey() {
+      addInternalImagerySurveyStyles();
+
+      const mount = document.getElementById('instructions-screen');
+      mount.style.display = 'block';
+      mount.classList.add('wide');
+      document.getElementById('task-ui').style.display = 'none';
+
+      // Anchor while this survey is open, and keep its timer sticky while scrolling
+      document.body.classList.add('pre-final-scroll');
+      ensureStyle('internal-imagery-internal-scroll-css', `
+        #instructions-screen.wide {
+          max-height: calc(100vh - 100px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        #internal-imagery-timer { position: sticky; top: 8px; }
+      `);
+
+      // Same questions as pre-final
+      const questions = [
+        'I think about problems in my mind in the form of a conversation with myself', 
+      'If I am walking somewhere by myself, I frequently think of conversations that I’ve recently had', 
+      'When I read, I tend to hear a voice in my "mind’s ear"', 
+      'I like to give myself some down time to talk through thoughts in my mind', 
+      'I often talk to myself internally while watching TV', 
+      'My inner speech helps my imagination', 
+      'When thinking about a social problem, I often talk it through in my head', 
+      'My memories often involve conversations I’ve had', 
+      'I rarely vocalize thoughts in my mind', 
+      'If I am walking somewhere by myself, I often have a silent conversation with myself', 
+      'I tend to think things through verbally when I am relaxing', 
+      'I hear words in my "mind’s ear" when I think'
+    ];
+
+      const leftQs = questions.slice(0, 6);
+      const rightQs = questions.slice(6);
+
+      const colHtml = (labels, colId, startIndex) => `
+        <div class="survey-col" id="${colId}">
+          ${labels.map((label, idx) =>
+            likertRowHtml(`${colId}-${startIndex + idx + 1}`, `${startIndex + idx + 1}. ${label}`)
+          ).join('')}
+        </div>
+      `;
+
+      mount.innerHTML = `
+        <div id="internal-imagery-timer" class="trial-timer" aria-live="polite"></div>
+        <div id="internal-imagery-survey" class="survey-container">
+          <h2 class="survey-title">Navigation Survey</h2>
+          <h3 class="survey-subtitle">Respond based on how you navigate the familiar places in your everyday environment (Scroll to view all questions).</h3>
+          <div class="survey-grid">
+            ${colHtml(leftQs, 'iis-col1', 0)}
+            ${colHtml(rightQs, 'iis-col2', 6)}
+          </div>
+          <div class="survey-key">
+            <strong>Scale:</strong>
+            1 (Totally Disagree) · 2 (Somewhat Disagree) · 3 (Neutral) ·
+            4 (Somewhat Agree) · 5 (Totally Agree)
+          </div>
+          <div class="survey-actions">
+            <button id="survey-submit" disabled>Continue</button>
+          </div>
+        </div>
+      `;
+
+      const responses = {};
+      const submitBtn = document.getElementById('survey-submit');
+      const allButtons = mount.querySelectorAll('#internal-imagery-survey .likert-btn');
+
+      function updateSubmitState() {
+        submitBtn.disabled = Object.keys(responses).length < 12;
+      }
+
+      allButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.q-row');
+          const qid = row.dataset.qid;
+          row.querySelectorAll('.likert-btn').forEach((b) => {
+            b.setAttribute('aria-pressed', 'false');
+            b.classList.remove('selected');
+          });
+          btn.setAttribute('aria-pressed', 'true');
+          btn.classList.add('selected');
+          responses[qid] = Number(btn.dataset.val);
+          updateSubmitState();
+        });
+      });
+
+      startTrialTimer(5 * 60 * 1000);
+
+      submitBtn.addEventListener('click', async () => {
+        window.internalImagerySurvey = { responses: { ...responses }, completedAt: Date.now() };
+        showPreFinalSurvey(); // proceed to your existing pre-final survey
+      });
+    }
+
+    function showPreFinalSurvey() {
+      addPreFinalSurveyStyles();
+
+      const mount = document.getElementById('instructions-screen');
+      mount.style.display = 'block';
+      mount.classList.add('wide');
+      document.getElementById('task-ui').style.display = 'none';
+
+      // Anchor page content to the top while the pre-final survey is showing
+      document.body.classList.add('pre-final-scroll');
+      ensureStyle('pre-final-internal-scroll-css', `
+        /* Let the instructions/survey panel scroll if it's taller than the viewport */
+        #instructions-screen.wide {
+          max-height: calc(100vh - 100px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        /* Keep the timer visible while the user scrolls the survey */
+        #pre-final-timer { position: sticky; top: 8px; }
+      `);
+
+
+      // ✅ Your custom text
+      const questions = ['When I navigate, I pay attention to the landmarks at the turning points and try to remember their sequence.', 
+      'I have navigational intuition.', "I can easily point to a specific place outside the building when I don't see it from the inside.", 
+      'I can find my way under low visibility conditions (or even in darkness) in familiar places better than other people', 
+      'I rely primarily on a schematic mental representation of my environment to figure out my position in the environment.', 
+      'My mental representation of the route that I traversed is analogous to a schematic map (e.g., floor-plan, blue-print, metro map) rather than a first-person perspective of routes and landmarks.', 
+      'To avoid getting lost, I usually try to memorize the landmarks around me, along with their associated turns.', 'I have an “internal compass”', 
+      'I usually attempt to mentally represent route segments, turns and their spatial relationships from a topdown aerial perspective.', 
+      'I usually attempt to visualize a map of the environment from a top-down aerial perspective as I travel.', 
+      'At any time during a route, I can point back to the landmarks I have passed by.', 
+      'I rely primarily on a schematic mental representation of my environment to help me in finding shortcuts.', 
+      'I can plan out my route of travel by visualizing a schematic map from a top-down aerial perspective.', 
+      'To reach my destination, I largely recruit a set of procedures telling me the actions to perform (i.e., go straight/back, turn left/right) at different locations on my route.', 
+      'I rely primarily on landmarks as signs of turning points along my route of travel.', 'I keep a mental record of the landmarks I see on my traveling route in a sequential fashion.', 
+      'If I were to walk on my route again, I would depend heavily on a sequence of mental “snapshots” of landmarks or scenes to go to the places I had been to.', 
+      'In an unfamiliar environment with no clear landmarks (e.g., forest, desert, new city) and/or in low visibility conditions (e.g., fog, heavy rain), I still have a good sense of where I am heading.'];
+
+      const leftQs = questions.slice(0, 9); 
+      const rightQs = questions.slice(9);    
+
+      const colHtml = (labels, colId, startIndex) => `
+        <div class="survey-col" id="${colId}">
+          ${labels.map((label, idx) =>
+            likertRowHtml(`${colId}-${startIndex + idx + 1}`,
+              `${startIndex + idx + 1}. ${label}`)
+          ).join('')}
+        </div>
+      `;
+
+      mount.innerHTML = `
+        <style>
+          .survey-title {
+            font-size: 20px; /* adjust size as you like */
+          }
+        </style>
+        <style>
+          .survey-subtitle {
+            font-size: 16px; /* adjust size as you like */
+          }
+        </style>
+        <div id="pre-final-timer" class="trial-timer" aria-live="polite"></div>
+        <div id="pre-final-survey" class="survey-container">
+          <h2 class="survey-title">Navigation Survey</h2>
+          <h3 class="survey-subtitle">Respond based on how you navigate the familiar places in your everyday environment (Scroll to view all questions).</h3>
+          <div class="survey-grid">
+            ${colHtml(leftQs, 'col1', 0)}   <!-- 1–5 -->
+            ${colHtml(rightQs, 'col2', 9)}  <!-- 6–10 -->
+          </div>
+
+          <div class="survey-key">
+            <strong>Scale:</strong>
+            1 (Totally Disagree) · 2 (Somewhat Disagree) · 3 (Neutral) · 
+            4 (Somewhat Agree) · 5 (Totally Agree)
+          </div>
+
+          <div class="survey-actions">
+            <button id="survey-submit" disabled>Continue</button>
+          </div>
+        </div>
+      `;
+
+      const responses = {};
+      const submitBtn = document.getElementById('survey-submit');
+      const allButtons = mount.querySelectorAll('#pre-final-survey .likert-btn');
+
+      function updateSubmitState() {
+        submitBtn.disabled = Object.keys(responses).length < 18;
+      }
+
+      allButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.q-row');
+          const qid = row.dataset.qid;
+          row.querySelectorAll('.likert-btn').forEach((b) => {
+            b.setAttribute('aria-pressed', 'false');
+            b.classList.remove('selected');
+          });
+          btn.setAttribute('aria-pressed', 'true');
+          btn.classList.add('selected');
+          responses[qid] = Number(btn.dataset.val);
+          updateSubmitState();
+        });
+      });
+
+      startTrialTimer(7 * 60 * 1000);
+
+      submitBtn.addEventListener('click', async () => {
+        window.preFinalSurvey = { responses: { ...responses }, completedAt: Date.now() };
+        showFinalSurvey();
+      });
+    }
+
+    function showFinalSurvey() {
+      addFinalSurveyStyles();
+
+      const mount = document.getElementById('instructions-screen');
+      mount.style.display = 'block';
+      mount.classList.add('wide');
+      document.getElementById('task-ui').style.display = 'none';
+
+      const questions = [
+        { id: 'q1', text: 'How accurately and completely did your thinking aloud reflect your true thought processes throughout the experiment?', scale: '1 (Very inaccurately) · 2 (Somewhat inaccurately) · 3 (Neutral) · 4 (Somewhat accurately) · 5 (Very accurately)' },
+        { id: 'q2', text: 'How familiar are you with graph theory and algorithms such as breadth-first search (BFS) or depth-first search (DFS)?', scale: '1 (Not at all familiar) · 2 (Slightly familiar) · 3 (Moderately familiar) · 4 (Very familiar) · 5 (Extremely familiar)' }
+      ];
+
+      const renderBlock = (q, idx, withTextbox) => `
+        <section class="question-block">
+          ${likertRowHtml(q.id, `${idx + 1}. ${q.text}`)}
+          ${withTextbox ? `<textarea id="${q.id}-text" class="survey-text" placeholder="Provide details here…" style="resize:none"></textarea>` : ``}
+          <div class="survey-key"><strong>Scale:</strong> ${q.scale}</div>
+        </section>
+      `;
+
+      mount.innerHTML = `
+        <div id="final-survey" class="survey-container">
+          <h2 class="survey-title">Final Survey</h2>
+          <div class="survey-grid">
+            <div class="survey-col" id="col-single">
+              ${renderBlock(questions[0], 0, true)}
+              ${renderBlock(questions[1], 1, false)}
+            </div>
+          </div>
+          <div class="survey-actions">
+            <button id="survey-submit" disabled>Submit</button>
+          </div>
+        </div>
+      `;
+
+      const responses = {};
+      const submitBtn = document.getElementById('survey-submit');
+      const allButtons = mount.querySelectorAll('#final-survey .likert-btn');
+
+      function updateSubmitState() {
+        submitBtn.disabled = Object.keys(responses).length < 2; // only Likert responses required
+      }
+
+      allButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.q-row');
+          const qid = row.dataset.qid;
+          row.querySelectorAll('.likert-btn').forEach((b) => {
+            b.setAttribute('aria-pressed', 'false');
+            b.classList.remove('selected');
+          });
+          btn.setAttribute('aria-pressed', 'true');
+          btn.classList.add('selected');
+          responses[qid] = Number(btn.dataset.val);
+          updateSubmitState();
+        });
+      });
+
+      submitBtn.addEventListener('click', async () => {
+        const freeText = {
+          q1: (document.getElementById('q1-text')?.value || '').trim()
+        };
+
+        window.finalSurvey = {
+          responses: { ...responses },
+          freeText,
+          completedAt: Date.now()
+        };
+        finishStudy();
+      });
+    }
+
+    // ===== helpers =====
+    function likertRowHtml(qId, label) {
+      return `
+        <div class="q-row" data-qid="${qId}">
+          <div class="q-text">${label}</div>
+          <div class="likert" role="radiogroup" aria-label="${label}">
+            ${[1,2,3,4,5].map(v => `
+              <button type="button"
+                      class="likert-btn"
+                      data-val="${v}"
+                      aria-pressed="false">${v}</button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ---- style helpers ----
+    function ensureStyle(id, css) {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement('style');
+        el.id = id;
+        el.textContent = css;
+        document.head.appendChild(el);
+      }
+    }
+    function removeStyle(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    // Shared rules for both surveys (keep this small & generic)
+    function addBaseSurveyStyles() {
+      ensureStyle('survey-base-css', `
+        .survey-container { max-width: 1000px; margin: 0 auto; padding: 16px; }
+        .survey-title { text-align: center; margin-bottom: 16px; }
+        .survey-subtitle { text-align: center }
+        .survey-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+        .survey-col { display: grid; gap: 8px; }
+        .q-row {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr; /* left question / right controls */
+          gap: 12px; align-items: center; padding: 8px 10px;
+          border: 1px solid #ddd; border-radius: 8px; background: #fafafa;
+        }
+        .q-text { font-size: 14px; line-height: 1.3; }
+        .likert { display: flex; justify-content: space-between; gap: 6px; }
+        .likert-btn {
+          min-width: 36px; min-height: 32px; border: 1px solid #bbb; border-radius: 6px;
+          background: white; cursor: pointer; font-size: 14px;
+        }
+        .likert-btn.selected, .likert-btn[aria-pressed="true"] {
+          outline: none; border-color: #222; background: #eaeaea; font-weight: 600;
+        }
+        .survey-key { text-align: center; margin: 20px 0 10px; font-size: 14px; }
+        .survey-actions { display: flex; justify-content: center; margin-top: 8px; }
+        #survey-submit[disabled] { opacity: .6; cursor: not-allowed; }
+
+        #instructions-screen.wide { max-width: 1100px; width: min(1100px, 95vw); }
+
+        /* shared width rules for textareas used in both screens */
+        #final-survey .survey-col textarea.survey-text,
+        #pre-final-survey textarea.survey-text,
+        .notes-textarea,
+        .practice-textarea {
+          width: 100%; max-width: none; min-width: 0; box-sizing: border-box;
+        }
+      `);
+    }
+
+    // Pre-final survey only 
+    function addPreFinalSurveyStyles() {
+      addBaseSurveyStyles();
+      removeStyle('final-survey-css'); // keep head lean when switching
+      ensureStyle('pre-final-survey-css', `
+        /* keep the survey centered and prevent overflow */
+        #pre-final-survey.survey-container { max-width: 1100px; width: 100%; margin: 0 auto; }
+        #pre-final-survey .survey-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+        #pre-final-survey .survey-col,
+        #pre-final-survey .q-row,
+        #pre-final-survey .q-row > * { min-width: 0; }
+
+        /* tighter Likert buttons */
+        #pre-final-survey .likert { width: max-content; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; }
+        #pre-final-survey .likert-btn { 
+          flex: 0 0 auto; min-width: 26px; height: 26px; padding: 0 6px;
+          font-size: 12px; line-height: 26px; border-radius: 4px; margin: 0; 
+        }
+
+        /* base split: left question, right buttons */
+        #pre-final-survey .q-row {
+          grid-template-columns: 1fr auto; /* auto shrinks right col to fit buttons */
+          gap: 8px; /* smaller gap between question text and buttons */
+        }
+
+        /* override when a textarea is present */
+        #pre-final-survey .q-row:has(textarea.survey-text) {
+          grid-template-columns: 1.2fr auto;
+        }
+      `);
+    }
+
+    // Final survey only
+    function addFinalSurveyStyles() {
+      addBaseSurveyStyles();
+      removeStyle('pre-final-survey-css'); // keep head lean when switching
+      ensureStyle('final-survey-css', `
+        /* Center and single-column layout */
+        #final-survey .survey-grid { grid-template-columns: 1fr; justify-items: center; }
+        #final-survey .survey-col { width: min(820px, 95vw); max-width: 820px; margin: 0 auto; }
+        #final-survey .survey-actions { justify-content: center; }
+
+        /* Stack question over controls and center */
+        #final-survey .q-row { grid-template-columns: 1fr; text-align: center; }
+        #final-survey .likert { justify-content: center; gap: 10px; }
+        #final-survey .survey-key { text-align: center; }
+
+        /* Centered, fixed-width textarea */
+        #final-survey textarea.survey-text {
+          display: block; margin: 8px auto 12px; width: 100%; box-sizing: border-box;
+          resize: none !important; overflow: auto;
+        }
+      `);
+    }
+
+    // ======================================
+    // EDIT LOGGING (per-textarea, per-trial)
+    // ======================================
+
+    /**
+     * Minimal-diff between two strings. Returns the middle region that changed.
+     * Output: { start, deleted, inserted }
+     */
+    function diffStrings(prev, next) {
+      const plen = prev.length, nlen = next.length;
+      let a = 0;
+      while (a < plen && a < nlen && prev.charCodeAt(a) === next.charCodeAt(a)) a++;
+      let b = 0;
+      while (b < (plen - a) && b < (nlen - a) &&
+            prev.charCodeAt(plen - 1 - b) === next.charCodeAt(nlen - 1 - b)) b++;
+      return {
+        start: a,
+        deleted: prev.slice(a, plen - b),
+        inserted: next.slice(a, nlen - b)
+      };
+    }
+
+    /**
+     * Create a logger bound to a single <textarea>.
+     * Produces normalized events you can replay deterministically.
+     */
+    function createEditLogger(textarea, { clock = () => performance.now() } = {}) {
+      const events = [];
+      const state = { value: textarea.value || "", start: textarea.selectionStart || 0, end: textarea.selectionEnd || 0 };
+      const flags = {
+        navKeyDown: false,
+        pointerDownInside: false,
+        ignoreNextSelectionchange: false,
+        pendingMutation: null,
+        lastPastedText: null
+      };
+    
+
+      // ---- Word-level coalescing for insertText ----
+      let wordBuf = null; // { kind:'insert'|'replace', selBefore, start, deleted, inserted }
+
+      const isWhitespace = (s) => /\s/.test(s);
+
+      function commitWord(reason = "") {
+        if (!wordBuf) return;
+        const t = clock();
+        // caret is already at end-of-word when this is called (e.g., just before a space/Enter)
+        const afterStart = textarea.selectionStart, afterEnd = textarea.selectionEnd;
+        push({
+          t,
+          op: wordBuf.kind,                      // 'insert' or 'replace'
+          selBefore: wordBuf.selBefore,          // where the word started
+          selAfter: { start: afterStart, end: afterEnd },
+          inserted: wordBuf.inserted,            // the whole word (no trailing whitespace)
+          deleted: wordBuf.deleted || "",
+          source: "keyboard",
+          meta: { reason }                       // e.g., 'whitespace','move','blur','destroy'
+        });
+        wordBuf = null;
+      }
+
+      const modpack = (e) => ({
+        key: e && "key" in e ? e.key : null,
+        ctrl: !!(e && e.ctrlKey),
+        alt: !!(e && e.altKey),
+        shift: !!(e && e.shiftKey),
+        meta: !!(e && e.metaKey)
+      });
+
+      const push = (rec) => { events.push(rec); };
+      const snapshot = () => {
+        state.value = textarea.value;
+        state.start = textarea.selectionStart;
+        state.end = textarea.selectionEnd;
+      };
+
+      // ---------- Clipboard payload helpers ----------
+      function onCopy(e) {
+        // Copy is a non-mutating op; record selected text for analysis.
+        const t = clock();
+        const start = textarea.selectionStart, end = textarea.selectionEnd;
+        if (document.activeElement !== textarea || start == null || end == null) return;
+        const payload = textarea.value.slice(start, end);
+        push({
+          t, op: "copy",
+          selBefore: { start, end },
+          selAfter:  { start, end },
+          inserted: "",
+          deleted: "",          
+          source: "clipboard",
+          meta: { ...modpack(e), payload }
+        });
+      }
+
+      function onCut(e) {
+        // 'Cut' itself doesn’t mutate; the actual deletion is logged in beforeinput:deleteByCut
+        // We could also log a 'copy' here, but your spec only needs copy (not cut payload), so skip.
+      }
+
+      function onPaste(e) {
+        // Cache pasted text in case beforeinput.data is empty in some browsers.
+        flags.lastPastedText = (e.clipboardData && e.clipboardData.getData("text/plain")) || "";
+      }
+
+      function onBeforeInput(e) {
+        const t = clock();
+        const start = textarea.selectionStart, end = textarea.selectionEnd;
+        const value = state.value;
+        const hasSel = start !== end;
+        const it = e.inputType || "";
+        const source =
+          it.includes("Paste") || it === "insertFromPaste" || it === "deleteByCut" ? "clipboard" : "keyboard";
+
+        // Any non-insertText mutation should flush a pending word first.
+        if (it !== "insertText") commitWord("non-insert");
+
+        if (it === "insertText") {
+          const ch = e.data ?? "";
+          if (isWhitespace(ch)) {                 // (or ch === " " if you only care about spaces)
+            commitWord("whitespace");
+            const afterEnd = start + (ch?.length || 1);
+            push({
+              t,
+              op: hasSel ? "replace" : "insert",
+              selBefore: { start, end },
+              selAfter: { start, end: afterEnd }, // ← final range now
+              inserted: ch,
+              deleted: hasSel ? value.slice(start, end) : "",
+              source,
+              meta: { inputType: it }             // ← no patchOnce
+            });
+            flags.ignoreNextSelectionchange = true;
+            return;
+          }
+
+          // CONTIGUITY CHECK: append if caret is exactly after current buffered word
+          const expectedNextStart = wordBuf ? (wordBuf.anchor + wordBuf.inserted.length) : null;
+
+          if (!wordBuf || hasSel || start !== expectedNextStart) {
+            // start a new word buffer
+            wordBuf = {
+              kind: hasSel ? "replace" : "insert",
+              selBefore: { start, end },
+              anchor: start,                               // fixed start of the word
+              deleted: hasSel ? value.slice(start, end) : "",
+              inserted: ch
+            };
+          } else {
+            // keep accumulating letters in the same word
+            wordBuf.inserted += ch;
+          }
+
+          flags.ignoreNextSelectionchange = true;
+          return;
+        }
+
+        // ----- Paste / Drop: widen selAfter to the full inserted span -----
+        if (it === "insertFromPaste" || it === "insertFromDrop") {
+          const inserted = (flags.lastPastedText ?? e.data ?? "");
+          const op = hasSel ? "replace" : "insert";
+          const deleted = hasSel ? value.slice(start, end) : "";
+
+          const afterStart = start;
+          const afterEnd = start + (inserted ? inserted.length : 0);
+
+          push({
+            t, op,
+            selBefore: { start, end },
+            selAfter: { start: afterStart, end: afterEnd }, // cover whole pasted text
+            inserted: inserted || "",
+            deleted: deleted || "",
+            source: "clipboard",
+            meta: { inputType: it }
+          });
+
+          flags.ignoreNextSelectionchange = true;
+          flags.lastPastedText = null;
+          return;
+        }
+
+        // ----- Deletes (including cut) -----
+        if (it.startsWith("delete")) {
+          let op = "delete";
+          let deleted = "";
+          let afterStart = start, afterEnd = start;
+
+          if (hasSel) {
+            // selection delete or deleteByCut
+            deleted = value.slice(start, end);
+            afterStart = afterEnd = start;
+          } else if (it === "deleteContentBackward") {
+            deleted = start > 0 ? value.slice(start - 1, start) : "";
+            afterStart = afterEnd = Math.max(0, start - 1);
+          } else if (it === "deleteContentForward") {
+            deleted = value.slice(start, start + 1);
+            afterStart = afterEnd = start;
+          } else {
+            // Fallback for other delete types (word/line). Let onInput reconcile if needed.
+            deleted = "";
+            afterStart = afterEnd = start;
+          }
+
+          push({
+            t, op,
+            selBefore: { start, end },
+            selAfter: { start: afterStart, end: afterEnd },
+            inserted: "",
+            deleted,
+            source,
+            meta: { inputType: it }
+          });
+
+          flags.ignoreNextSelectionchange = true;
+          return;
+        }
+
+        // ----- Enter / paragraph break -----
+        if (it === "insertParagraph" || it === "insertLineBreak") {
+          commitWord("newline"); // end any buffered word
+          const inserted = "\n";
+          const op = hasSel ? "replace" : "insert";
+          const deleted = hasSel ? value.slice(start, end) : "";
+          push({
+            t, op,
+            selBefore: { start, end },
+            selAfter: { start, end: start + 1 }, // newline is one char in the DOM
+            inserted,
+            deleted,
+            source: "keyboard",
+            meta: { inputType: it }
+          });
+          flags.ignoreNextSelectionchange = true;
+          return;
+        }
+
+        // ----- Undo / Redo -----
+        if (it === "historyUndo" || it === "historyRedo") {
+          commitWord("non-insert");
+          const idx = events.length;          // assumes `push` appends to `events`
+          push({
+            t, op: it === "historyUndo" ? "undo" : "redo",
+            selBefore: { start, end },
+            selAfter: { start, end },         // will be patched on input
+            inserted: "",
+            deleted: "",
+            source: "keyboard",
+            meta: { inputType: it }
+          });
+          flags.pendingUndoRedo = { idx, beforeValue: state.value };
+          flags.ignoreNextSelectionchange = true;
+          return;
+        }
+
+        // Default: ignore other beforeinput types (composition, format, etc.)
+      }
+
+
+      function onInput(_e) {
+        // After the DOM changes. Update selAfter for last event; handle undo/redo diff.
+        const afterStart = textarea.selectionStart, afterEnd = textarea.selectionEnd;
+        if (flags.pendingUndoRedo) {
+          const { idx, beforeValue } = flags.pendingUndoRedo;
+          const afterValue = textarea.value;
+
+          const { inserted, deleted } = diffStrings(beforeValue, afterValue);
+          const ev = events[idx];
+          ev.inserted = inserted;
+          ev.deleted  = deleted;
+          ev.selAfter = { start: textarea.selectionStart, end: textarea.selectionEnd };
+
+          delete flags.pendingUndoRedo;
+        }
+        if (flags.pendingMutation) {
+          const pm = flags.pendingMutation;
+          const prev = state.value;
+          const now = textarea.value;
+          const { start, deleted, inserted } = diffStrings(prev, now);
+          pm.selAfter = { start: afterStart, end: afterEnd };
+          pm.selBefore = { start, end: start + deleted.length }; // accurate for history ops
+          pm.deleted = deleted;
+          pm.inserted = inserted;
+          push(pm);
+          flags.pendingMutation = null;
+        } else if (events.length > 0) {
+          // Patch selAfter for the most recent mutation
+          const last = events[events.length - 1];
+          if (last?.meta?.patchOnce) {
+            last.selAfter = { start: afterStart, end: afterEnd };
+            last.meta.patchOnce = false;
+          }
+        }
+        snapshot();
+        // Ignore the next selectionchange triggered by this input
+        flags.ignoreNextSelectionchange = true;
+        queueMicrotask(() => { flags.ignoreNextSelectionchange = false; });
+      }
+
+      // ---------- Navigation & caret movement ----------
+      function onKeyDown(e) {
+        if (e.isComposing) return;
+
+        // Keys that move the caret (no text inserted)
+        const navKeys = new Set(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","PageUp","PageDown"]);
+
+        // Printable key = single-character key with no Ctrl/Cmd/Alt modifiers
+        const isPrintable = (e.key && e.key.length === 1) && !e.ctrlKey && !e.metaKey && !e.altKey;
+
+        // Only flush the word buffer for non-printable / control / nav keys
+        if (!isPrintable) {
+          commitWord("keydown");
+        }
+
+        // Track keyboard caret moves
+        if (navKeys.has(e.key)) {
+          flags.navKeyDown = true;
+        }
+      }
+
+      function onPointerDown(_e) { commitWord("pointer"); flags.pointerDownInside = true; }
+      function onPointerUp(_e) { /* noop */ }
+
+      function onSelectionChange(_e) {
+        if (document.activeElement !== textarea) return;
+        if (flags.ignoreNextSelectionchange) return;
+
+        const t = clock();
+        const startB = state.start, endB = state.end;
+        const startA = textarea.selectionStart, endA = textarea.selectionEnd;
+
+        if (startB === startA && endB === endA) return;
+
+        let op = null, source = null;
+        if (flags.navKeyDown) { op = "moveCaret"; source = "keyboard"; }
+        else if (flags.pointerDownInside) { op = "clickCaret"; source = "mouse"; }
+
+        if (op) {
+          push({
+            t, op,
+            selBefore: { start: startB, end: endB },
+            selAfter: { start: startA, end: endA },
+            inserted: "",
+            deleted: "",
+            source,
+            meta: {}
+          });
+        }
+        flags.navKeyDown = false;
+        flags.pointerDownInside = false;
+        snapshot();
+      }
+
+      // ---------- Bind / Unbind ----------
+      const handlers = {
+        beforeinput: onBeforeInput,
+        input: onInput,
+        keydown: onKeyDown,
+        selectionchange: onSelectionChange,
+        pointerdown: onPointerDown,
+        pointerup: onPointerUp,
+        copy: onCopy,
+        cut: onCut,
+        paste: onPaste
+      };
+
+      function onBlur() { commitWord("blur"); } 
+      
+      function bind() {
+        textarea.addEventListener("beforeinput", handlers.beforeinput);
+        textarea.addEventListener("input", handlers.input);
+        textarea.addEventListener("keydown", handlers.keydown);
+        document.addEventListener("selectionchange", handlers.selectionchange);
+        textarea.addEventListener("pointerdown", handlers.pointerdown);
+        textarea.addEventListener("pointerup", handlers.pointerup);
+        textarea.addEventListener("copy", handlers.copy);
+        textarea.addEventListener("cut", handlers.cut);
+        textarea.addEventListener("paste", handlers.paste);
+        textarea.addEventListener("blur", onBlur);
+      }
+      function unbind() {
+        textarea.removeEventListener("beforeinput", handlers.beforeinput);
+        textarea.removeEventListener("input", handlers.input);
+        textarea.removeEventListener("keydown", handlers.keydown);
+        document.removeEventListener("selectionchange", handlers.selectionchange);
+        textarea.removeEventListener("pointerdown", handlers.pointerdown);
+        textarea.removeEventListener("pointerup", handlers.pointerup);
+        textarea.removeEventListener("copy", handlers.copy);
+        textarea.removeEventListener("cut", handlers.cut);
+        textarea.removeEventListener("paste", handlers.paste);
+        textarea.removeEventListener("blur", onBlur);
+      }
+
+      bind();
+      snapshot();
+
+      return {
+        events,
+        get value() { return state.value; },
+        get selection() { return { start: state.start, end: state.end }; },
+        destroy: () => { commitWord("destroy"); unbind(); }
+      };
+    }
+
+    // Keep references for the current trial so we can save/cleanup
+    let _trialLoggers = { final: null, notes: null };
+    function destroyTrialLoggers() {
+      try { _trialLoggers.final && _trialLoggers.final.destroy(); } catch {}
+      try { _trialLoggers.notes && _trialLoggers.notes.destroy(); } catch {}
+      _trialLoggers = { final: null, notes: null };
+    }
+
+    // --------------------------------------
+    // AUDIO RECORDING
+    // --------------------------------------
+    let audioStream = null;
+    let recorder = null;
+    const audioChunks = []; // {block, trial, blob}
+
+    async function requestAudioPermission() {
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      } catch (e) {
+        console.error(e);
+        showError("Microphone access is needed to record your responses.");
+      }
+    }
+
+    function startRecording(blockNum, trialNum) {
+      if (!audioStream) return;
+      recorder = new MediaRecorder(audioStream);
+      recorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push({ block:blockNum, trial:trialNum, blob:e.data });
+      };
+      recorder.start();
+    }
+
+    function stopRecording(cb) {
+      if (!recorder) { cb && cb(); return; }
+      recorder.onstop = () => { cb && cb(); };
+      recorder.stop();
+      recorder = null;
+    }
+
+    // =============================
+    // LIVE VOICE FEEDBACK MODULE
+    function ensurePromptBanner() {
+      let el = document.getElementById("prompt-message");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "prompt-message";
+        el.style.display = "none";
+        el.style.maxWidth = "600px";
+        el.style.margin = "0 0 20px 0";
+        el.style.background = "#E3F2FD";
+        el.style.color = "#0D47A1";
+        el.style.border = "1px solid #90CAF9";
+        el.style.borderRadius = "8px";
+        el.style.padding = "12px 16px";
+        el.style.textAlign = "center";
+        const anchor = document.querySelector('#error-message');
+        (anchor?.parentNode || document.body).insertBefore(el, anchor?.nextSibling || null);
+      }
+      return el;
+    }
+
+    function showPrompt(msg, ms = 4000) {
+      const el = ensurePromptBanner();
+      el.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(showPrompt._t);
+      showPrompt._t = setTimeout(() => (el.style.display = "none"), ms);
+    }
+
+    const VoiceFeedback = (() => {
+      let ctx = null;
+      let source = null;
+      let analyser = null;
+      let freqData = null;
+      let running = false;
+      let timer = null;
+
+      const cfg = {
+        intervalSec: 20,
+        threshold: .0008,
+        minHz: 85,
+        maxHz: 255,
+        fftSize: 2048,
+        smoothing: 0.8,
+      };
+
+      let accum = 0;
+      let frames = 0;
+      let minBin = 0, maxBin = 0;
+
+      function setupBins(sampleRate, fftSize) {
+        const binHz = sampleRate / fftSize;
+        minBin = Math.floor(cfg.minHz / binHz);
+        maxBin = Math.ceil(cfg.maxHz / binHz);
+      }
+
+      function sampleLoop() {
+        if (!running) return;
+        analyser.getFloatFrequencyData(freqData);
+        let total = 0;
+        for (let i = minBin; i <= maxBin && i < freqData.length; i++) {
+          total += Math.pow(10, freqData[i] / 20);
+        }
+        const avg = total / Math.max(1, (maxBin - minBin + 1));
+        accum += avg;
+        frames += 1;
+        requestAnimationFrame(sampleLoop);
+      }
+
+      async function start() {
+        if (running) return;
+        if (!audioStream) return;
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        await ctx.resume().catch(()=>{});
+        source = ctx.createMediaStreamSource(audioStream);
+
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = cfg.fftSize;
+        analyser.smoothingTimeConstant = cfg.smoothing;
+
+        freqData = new Float32Array(analyser.frequencyBinCount);
+        source.connect(analyser);
+
+        setupBins(ctx.sampleRate, analyser.fftSize);
+        accum = 0; frames = 0; running = true;
+        sampleLoop();
+
+        timer = setInterval(() => {
+          if (!running) return;
+          const avgActivity = frames ? (accum / frames) : 0;
+          if (avgActivity < cfg.threshold) {
+            showPrompt("Please keep speaking your thoughts aloud.");
+          }
+          console.debug('avgActivity', avgActivity.toFixed(5));
+          accum = 0; frames = 0;
+        }, cfg.intervalSec * 1000);
+      }
+
+      async function stop() {
+        running = false;
+        clearInterval(timer);
+        try { source && source.disconnect(); } catch (_) {}
+        try { ctx && (await ctx.close()); } catch (_) {}
+        ctx = source = analyser = null;
+        freqData = null;
+        accum = 0; frames = 0;
+      }
+
+      function setConfig(overrides) { Object.assign(cfg, overrides || {}); }
+      return { start, stop, setConfig, cfg };
+    })();
+
+
+    // --------------------------------------
+    // INTRO SCREENS
+    // --------------------------------------
+    let introIndex = 0;
+    const introScreens = [
+      // 0
+      `
+        <p>In this study, you will solve problems involving identifying the shortest path between cities or people.</p>
+        <p>Only anonymous data without any personal information will be stored for research purposes.</p>
+        <p>Audio will also be recorded while you solve the problems.</p>
+        <p>The whole study will take no longer than 1 hour to complete.</p>
+        <p>If you agree to participate in the study, please respond by typing something in the box provided below.</p>
+        <p>Otherwise, please close the study window.</p>
+        <p><input type="text" id="agreeInput" style="width: 95%;" placeholder="Type your response here..."></p>
+      `,
+      // 1
+      `        <p>Please provide the following information.</p>
+        <p>Gender:</p>
+        <p>
+          <select id="genderSelect" style="width: 100%;">
+            <option value="" disabled selected hidden>Select...</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Nonbinary">Nonbinary</option>
+            <option value="Other">Other (please specify)</option>
+          </select>
+        </p>
+        <p id="otherGenderWrapper" style="display:none;">
+          <input type="text" id="otherGenderInput" style="width: 95%;" placeholder="Please specify..." />
+        </p>
+        <p>Age:</p>
+        <p><input type="number" id="ageInput" style="width: 95%;" placeholder="Type your age here..." /></p>
+
+        <p>Language(s) Spoken:</p>
+        <p>
+          <select id="languageSelect" style="width: 100%;">
+            <option value="" disabled selected hidden>Select...</option>
+            <option value="Monolingual">Monolingual (English only)</option>
+            <option value="Bilingual">Bilingual</option>
+            <option value="Multilingual">Multilingual (more than 2 languages)</option>
+          </select>
+        </p>
+        <p id="languageDetailsWrapper" style="display:none;">
+          <label for="languageDetailsInput" style="display:block; margin-bottom:4px;">
+            Please list the language(s) besides English you speak, and briefly include your level of fluency.
+          </label>
+          <textarea id="languageDetailsInput" style="width: 95%; min-height: 70px;" placeholder="e.g., Spanish (fluent), Mandarin (intermediate)"></textarea>
+        </p>
+    `,
+      // 2
+      `
+        <p>Please turn off any music or potential sources of distraction.</p>
+        <p>The experiment will switch to full screen mode when you press the button below.</p>
+        <p>Please remain in full screen mode until the experiment is complete.</p>
+        <p>Microphone access will also be requested for audio recording.</p>
+      `,
+      // 3
+      `
+        <p>The experiment will consist of two blocks of problems where you identify the shortest path between fictional cities or people. Each block will contain ${N} problems.</p>
+        <p>Before the first block, you will be presented with instructions.</p>
+        <p>You will have a brief period to rest in between the first and second blocks.</p>
+        <p>Please press 'Next' to see the instructions for Block #1.</p>
+      `
+    ];
+
+    function startIntro() {
+      introIndex = 0;
+      showIntroScreen();
+    }
+
+    function showIntroScreen() {
+      const introDiv = document.getElementById('intro-screen');
+      introDiv.innerHTML = introScreens[introIndex] + `
+        <div style="text-align: center; margin-top: 24px;">
+          <button id="introNextBtn" style="padding: 10px 20px;">Next</button>
+        </div>
+      `;
+      introDiv.style.display = 'block';
+
+      document.getElementById('introNextBtn').addEventListener('click', handleIntroNext);
+
+      if (introIndex === 1) {
+        const sel = document.getElementById('genderSelect');
+        sel.addEventListener('change', () => {
+          document.getElementById('otherGenderWrapper').style.display =
+            sel.value === 'Other' ? 'block' : 'none';
+        });
+
+        const langSel = document.getElementById('languageSelect');
+        const langWrap = document.getElementById('languageDetailsWrapper');
+        if (langSel && langWrap) {
+          langSel.addEventListener('change', () => {
+            const show = langSel.value === 'Bilingual' || langSel.value === 'Multilingual';
+            langWrap.style.display = show ? 'block' : 'none';
+          });
+        }
+      }
+    }
+
+    async function handleIntroNext() {
+      if (introIndex === 0) {
+        const val = document.getElementById('agreeInput').value.trim();
+        if (!val) { showError("Please type something to proceed."); return; }
+        participantData.agreement = val;
+        } else if (introIndex === 1) {
+        const gSel = document.getElementById('genderSelect');
+        const age = document.getElementById('ageInput').value.trim();
+        const langSel = document.getElementById('languageSelect');
+        const langDetails = (document.getElementById('languageDetailsInput')?.value || '').trim();
+
+        if (!gSel.value || !age || !langSel.value) {
+          showError("Please select a gender, enter your age, and choose your languages."); return;
+        }
+
+        if (gSel.value === 'Other') {
+          const spec = document.getElementById('otherGenderInput').value.trim();
+          if (!spec) { showError("Please specify your gender."); return; }
+          participantData.gender = spec;
+        } else {
+          participantData.gender = gSel.value;
+        }
+        participantData.age = age;
+
+        if ((langSel.value === 'Bilingual' || langSel.value === 'Multilingual') && !langDetails) {
+          showError("Please list the other language(s) you speak (besides English) and your fluency."); return;
+        }
+        participantData.languages = langSel.value;
+        participantData.languageDetails = langDetails;
+
+      } else if (introIndex === 2) {
+        if (document.body.requestFullscreen) document.body.requestFullscreen();
+        else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        await requestAudioPermission();
+      }
+
+      introIndex++;
+      if (introIndex < introScreens.length) {
+        showIntroScreen();
+      } else {
+        document.getElementById('intro-screen').style.display = 'none';
+        loadBlock();
+      }
+    }
+
+    // --------------------------------------
+    // PER-BLOCK INSTRUCTIONS
+    // --------------------------------------
+    function loadBlock() {
+      // NEW (order-based)
+      const blockType = blocks[blockIndex];
+      const blockNum  = blockIndex + 1;
+
+      // first block gets Forward instructions; second gets Reverse
+      (blockIndex === 0 ? showForwardInstructions : showReverseInstructions)(blockNum);
+    }
+
+    function showForwardInstructions(blockNumber) {
+      const inst = document.getElementById('instructions-screen');
+      inst.style.display = 'block';
+      inst.innerHTML = `
+        <h2>Experiment Instructions (for both blocks)</h2>
+        <p>In this experiment, you will be presented with sets of cities or people and their connections. Your goal is to find the shortest path between two fictional cities or people given the specified layout</p>
+        <p style="font-size:1.15rem;"><strong>Importantly, as you are solving the problems, try to say out loud everything that goes through your mind.</strong></p>
+        <p style="font-size:1.15rem;"><strong>If you are silent for a long period of time, we will send you a reminder to speak your thoughts aloud.</strong></p>
+        <p>There will be ${N} problems in each block.</p>
+        <div style="text-align:center;margin-top:24px;">
+          <button id="begin-block-btn" style="padding:10px 20px;">Continue to Practice Trial</button>
+        </div>
+      `;
+      document.getElementById('begin-block-btn').addEventListener('click', () => {
+        showForwardRuleCheck(blockNumber);
+      });
+    }
+
+    // Rule check (simplified right column: only Continue)
+    function showForwardRuleCheck(blockNumber) {
+      const inst = document.getElementById('instructions-screen');
+      inst.style.display = 'none';
+
+      const container = document.getElementById('task-ui');
+      container.style.display = 'flex';
+
+      // Left-column practice text + example distance table
+      const leftHTML = `
+        <div class="rules-text">
+          <h3>Example Trial (Practice)</h3>
+          <h3>Instructions</h3>
+          <p>In this experiment, each problem will present a set of fictional cities or people and their connections. When the same city or person's name appears more than once in the problem, it refers to the same city or person. Your goal is to find the shortest path between two cities or people given the specified layout.</p>
+          <p><strong>Task:</strong></p>
+          <p>Consider the following list of social relations: Lily knows about Josh, Mila knows about Miles, Miles knows about Ben, Miles knows about Gabe, Lily knows about Adam, Mila knows about Lily. What is the shortest path from Mila to Ben?</p>
+          <p><strong>Importantly, as you are solving the problems, try to say out loud everything that goes through your mind.</strong></p>
+          <p>Feel free to take notes as you solve the problems, and include your Final Response as a list of names separated by commas.</p>
+          <p>Once you feel comfortable with the format and have typed in a Final Response, press <strong>Continue</strong> to begin the experiment.</p>
+        </div>
+      `;
+
+
+      container.innerHTML = `
+        <div class="left-column">${leftHTML}</div>
+        <div class="right-column" style="justify-content:flex-start;">
+          <label for="practice-notes" style="margin-top:12px; display:block;">Notes:</label>
+          <textarea id="practice-notes"
+            aria-label="Practice typing area"
+            placeholder="Type your notes here…"
+            class="practice-textarea"></textarea>
+
+          <label for="practice-final-response" style="margin-top:12px; display:block;">Final Response:</label>
+          <textarea id="practice-final-response"
+            aria-label="Final response area"
+            placeholder="Type your final response here…"
+            class="practice-textarea"
+            style="margin-top:6px; min-height:80px;"></textarea>
+          <div class="center" style="margin-top:12px;">
+            <button id="forward-check-continue-btn" class="done-button">Continue (Begin Experiment)</button>
+          </div>
+        </div>
+      `;
+
+
+      const continueBtn = container.querySelector('#forward-check-continue-btn');
+      const finalTA = document.getElementById('practice-final-response');
+
+      function updatePracticeGate() {
+        const ok = (finalTA.value || '').trim().length > 0;
+        continueBtn.disabled = !ok;
+        continueBtn.setAttribute('aria-disabled', String(!ok));
+      }
+      updatePracticeGate();
+      finalTA.addEventListener('input', updatePracticeGate);
+
+      continueBtn.addEventListener('click', () => {
+        if (continueBtn.disabled) return; // defense-in-depth
+        participantData.practiceNotes = (document.getElementById('practice-notes')?.value || '').trim();
+        startBlock();
+      });
+  }
+
+
+    function showReverseInstructions(blockNumber) {
+      const inst = document.getElementById('instructions-screen');
+      inst.style.display = 'block';
+      inst.innerHTML = `
+        <h2>Please take a brief rest before continuing to Block #${blockNumber}</h2>
+        <p>In this block, you will continue solving shortest-path style problems.</p>
+        <p>As you solve the problems, please continue to describe your thought process out loud.</p>
+        <p>There will be ${N} problems in this block.</p>
+        <div style="text-align:center;margin-top:24px;">
+          <button id="begin-block-btn" style="padding:10px 20px;">Begin block</button>
+        </div>
+      `;
+      document.getElementById('begin-block-btn').addEventListener('click', () => {
+        inst.style.display = 'none';
+        startBlock();
+      });
+    }
+
+    // --------------------------------------
+    // BLOCK & TRIAL FLOW
+    // --------------------------------------
+    function startBlock() {
+      trialIndex = 0;
+      document.getElementById('task-ui').style.display = 'flex';
+      loadTrial();
+    }
+
+
+    function loadTrial() {
+      const blockNum = blockIndex + 1;
+      const problemNum = trialIndex + 1;
+      const type = blocks[blockIndex];
+      currentPrompt = (type === 'forward' ? forwardPrompts : reversePrompts)[trialIndex];
+      currentState = structuredClone(blockData[type][trialIndex]);
+      problemStartTime = Date.now();
+      startRecording(blockNum, problemNum);
+      VoiceFeedback.start();
+      const numCities = (currentPrompt?.path_nodes || []).length;
+      const limitMs   = getTrialLimitMsFromCities(numCities);
+      renderUI(type, limitMs);
+      destroyTrialLoggers();
+      _trialLoggers.notes = createEditLogger(document.getElementById('trial-notes'));
+      _trialLoggers.final = createEditLogger(document.getElementById('trial-final-response'));
+      trialActive = true;
+      startTrialTimer(limitMs);  // timer runs invisibly; still enforces time limit
+    }
+
+    // --------------------------------------
+    // RENDERING — FORWARD/REVERSE BLOCKS
+    // --------------------------------------
+    function renderUI(type, limitMs) {
+
+      const container = document.getElementById('task-ui');
+
+      // Left column = instructions + problem prompt
+
+      const instructionsHTML = `
+        <div class="rules-text">
+          <h3>Instructions</h3>
+          <p>Your goal is to find the shortest path between two cities or people given the specified layout. When the same city or person's name appears more than once in the problem, it refers to the same city or person.</p>
+          <p><strong>Task:</strong></p>
+        </div>
+        <div id="problem-prompt" class="stim-prompt">
+          ${currentPrompt?.prompt || ''}
+        </div>
+        <p><strong>Importantly, as you are solving the problem, try to say out loud everything that goes through your mind.</strong></p>
+        <p>Feel free to take notes as you solve the problem, and include your Final Response as a list of cities or names separated by commas.</p>
+      `;
+
+      const cities = currentPrompt?.path_nodes || ['City 1','City 2','City 3','City 4','City 5'];
+
+      container.innerHTML = `
+        <div class="left-column">${instructionsHTML}</div>
+        <div class="right-column" style="justify-content:flex-start;">
+
+          <div id="trial-timer" class="trial-timer" aria-live="polite">${formatClock(limitMs)}</div>
+          <label for="trial-notes" style="margin-top:12px; display:block;">Notes:</label>
+          <textarea id="trial-notes"
+            aria-label="Notes for this trial"
+            placeholder="Type your notes here…"
+            class="notes-textarea"
+            style="margin-top:12px;"></textarea>
+
+          <label for="trial-final-response" style="margin-top:12px; display:block;">Final Response:</label>
+          <textarea id="trial-final-response"
+            aria-label="Final response area"
+            placeholder="Type your final response here…"
+            class="notes-textarea"
+            style="margin-top:6px; min-height:80px;"></textarea>
+
+          <div class="center" style="margin-top:12px;">
+            <button id="done-button" class="done-button">Continue</button>
+          </div>
+        </div>
+      `;
+
+      const doneBtn = container.querySelector('#done-button');
+      const trialTA = document.getElementById('trial-final-response');
+
+      function updateTrialGate() {
+        const ok = (trialTA.value || '').trim().length > 0;
+        doneBtn.disabled = !ok;
+        doneBtn.setAttribute('aria-disabled', String(!ok));
+      }
+      updateTrialGate();
+      trialTA.addEventListener('input', updateTrialGate);
+
+      doneBtn.addEventListener('click', () => {
+        if (doneBtn.disabled) return; // defense-in-depth
+        endTrial('user');
+      });
+    }
+
+    // --------------------------------------
+    // END OF TRIAL / BLOCK / STUDY
+    // --------------------------------------
+    function endTrial(reason = 'user') {
+      if (!trialActive) return;
+      trialActive = false;
+      clearTrialTimer();
+
+      // capture notes now (works for both user click and timeout)
+      const trialNotes = (document.getElementById('trial-notes')?.value || '').trim();
+      const trialFinalResponse = (document.getElementById('trial-final-response')?.value || '').trim();
+
+      stopRecording(async () => {
+        await VoiceFeedback.stop();
+
+      const type = blocks[blockIndex];
+      allProblemLogs.push({
+        blockType: type,
+        trialIndex: trialIndex + 1,
+        promptId: currentPrompt?.id || null,
+        startTime: problemStartTime,
+        endTime: Date.now(),
+        endedBy: reason,
+        notes: trialNotes,
+        finalResponse: trialFinalResponse,
+        editLogs: {
+          notes:  _trialLoggers.notes  ? _trialLoggers.notes.events  : [],
+          final:  _trialLoggers.final  ? _trialLoggers.final.events  : []
+        }
+      });
+      destroyTrialLoggers();
+
+
+        trialIndex++;
+        if (trialIndex < N) {
+          if (REST_AFTER > 0 && trialIndex === REST_AFTER) {
+            // We've just finished the i-th trial of this block → show rest screen
+            showInBlockRest();
+          } else {
+            loadTrial(); // normal progression
+          }
+        } else {
+          blockIndex++;
+          if (blockIndex < blocks.length) {
+            document.getElementById('task-ui').style.display = 'none';
+            loadBlock();
+          } else {
+            return showInternalImagerySurvey(); // NEW: run the extra survey first
+          }
+        }
+      });
+    }
+
+
+    async function finishStudy(finalSurveyObj) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+      document.getElementById('task-ui').style.display = 'none';
+
+      const inst = document.getElementById('instructions-screen');
+      if (inst) inst.style.display = 'none';
+
+      let end = document.getElementById('end-screen');
+      if (!end) {
+        // Failsafe: recreate if it was ever removed
+        end = document.createElement('div');
+        end.id = 'end-screen';
+        end.innerHTML = `<p style="margin-bottom:24px;font-size:18px;">
+          Thank you for participating.<br>You may now close this window.
+        </p>`;
+        document.body.appendChild(end);
+      }
+      
+      const finalSurvey = finalSurveyObj || window.finalSurvey || null;
+      const preFinalSurvey = window.preFinalSurvey || null;
+      const internalImagerySurvey = window.internalImagerySurvey || null; // NEW
+
+      const puzzleData = {
+        participantData,
+        puzzleLogs: allProblemLogs,
+        finalSurvey,
+        preFinalSurvey,
+        internalImagerySurvey
+      };
+      const timestamp = Date.now();
+      const participantId = `P_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+
+      try {
+        // Save to Firebase
+         try {
+        //   1. Upload audio files to Storage
+           for (const { block, trial, blob } of audioChunks) {
+             const path = `audio/${participantId}/block${block}_problem${trial}.webm`;
+             const audioRef = ref(storage, path);
+
+        //     ensure rules match; fall back to a safe audio type
+             const ct = (blob && blob.type) ? blob.type
+                     : 'audio/webm'; // fallback for browsers that omit type
+
+             await uploadBytes(audioRef, blob, { contentType: ct });
+           }
+
+        //   2. Save experiment data to Firestore
+           const experimentData = {
+             participantId,
+             timestamp: serverTimestamp(),
+             clientTimestamp: timestamp,
+             participantData,
+             puzzleLogs: allProblemLogs,
+             finalSurvey,
+             preFinalSurvey,
+             internalImagerySurvey,
+             audioFileCount: audioChunks.length,
+             userAgent: navigator.userAgent
+           };
+
+           const docRef = await addDoc(collection(db, 'experiments'), experimentData);
+           console.log('Data saved to Firebase with ID:', docRef.id);
+
+         } catch (firebaseError) {
+           console.error('Firebase save failed:', firebaseError);
+           showError('Could not save to Firebase; will save locally instead.');
+         }
+
+        // Always create local ZIP as backup
+        const zip = new JSZip();
+        zip.file("puzzle_data.json", JSON.stringify(puzzleData, null, 2));
+        audioChunks.forEach(({ block, trial, blob }) => {
+          zip.file(`block${block}_problem${trial}.webm`, blob);
+        });
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        saveAs(zipBlob, "combined_task_data_with_audio.zip");
+
+      } catch (err) {
+        console.error('Error in finishStudy:', err);
+        showError('Some data saving failed, but study is complete.');
+      } finally {
+        end.style.display = 'block';
+        end.setAttribute('tabindex', '-1');
+        end.focus();
+        document.addEventListener('keydown', onEndScreenKey, { once: true });
+      }
+    }
+
+    function onEndScreenKey() {
+      document.removeEventListener('keydown', onEndScreenKey);
+      const end = document.getElementById('end-screen');
+      end.innerHTML = `
+        <p style="margin-bottom:16px; font-size:18px;">
+          Thank you for participating in our study!
+        </p>
+        <p style="font-size:14px; opacity:.8;">
+          Access the completion code here: https://app.prolific.com/submissions/complete?cc=C1H77WPO
+        </p>
+      `;
+    }
+    // START
+    // --------------------------------------
+    startIntro();
+  </script>
+  <footer class="site-footer">
+    <div class="footer-content">
+      <a href="https://support.microsoft.com/contactus">Contact Us</a>
+      <a href="https://go.microsoft.com/fwlink/?LinkId=521839">Privacy & Cookies</a>
+      <a href="https://go.microsoft.com/fwlink/?LinkID=246338">Terms of Use</a>
+      <a href="https://go.microsoft.com/fwlink/?linkid=2196228%20">Trademarks</a>
+      <span>© 2025 Microsoft</span>
+    </div>
+  </footer>
+</body>
+</html>
